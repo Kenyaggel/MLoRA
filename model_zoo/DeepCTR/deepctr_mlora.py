@@ -45,7 +45,7 @@ class DeepCTR_LORA(BaseModel):
         elif "autoint" in self.model_config['name']:
             model = AutoInt(linear_feature_columns, dnn_feature_columns,self.n_domain,self.model_config['lora_reduce'],
                                    dnn_hidden_units=self.model_config['hidden_dim'], att_head_num=4,
-                                   dnn_dropout=self.model_config['dropout'])
+                                   dnn_dropout=self.model_config['dropout'], num_experts=self.model_config['num_experts'])
         elif "pnn" in self.model_config['name']:
             model = PNN(dnn_feature_columns, self.n_domain,self.model_config['lora_reduce'], dnn_hidden_units=self.model_config['hidden_dim'],
                                dnn_dropout=self.model_config['dropout'])
