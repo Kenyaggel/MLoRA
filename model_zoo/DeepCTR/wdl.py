@@ -7,6 +7,8 @@ from deepctr.layers.core import PredictionLayer, DNN
 from deepctr.layers.utils import add_func, combined_dnn_input
 
 from model_zoo.DeepCTR.mlora import Mlora
+from model_zoo.lora_moe import MloraMoE
+
 
 def WDL(linear_feature_columns, dnn_feature_columns, n_domain, lora_reduce, dnn_hidden_units=(256, 128, 64), l2_reg_linear=0.00001,
         l2_reg_embedding=0.00001, l2_reg_dnn=0, seed=1024, dnn_dropout=0, dnn_activation='relu',
@@ -41,7 +43,19 @@ def WDL(linear_feature_columns, dnn_feature_columns, n_domain, lora_reduce, dnn_
     dnn_input = combined_dnn_input(sparse_embedding_list, dense_value_list)
 
     # dnn_out = DNN(dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, False, seed=seed)(dnn_input)
-    dnn_out = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, False, seed=seed,lora_reduce=lora_reduce)([dnn_input,domain_input_layer])
+    dnn_out = MloraMoE(
+        n_domain=n_domain,
+        dnn_hidden_units=dnn_hidden_units,
+        activation=dnn_activation,
+        l2_reg_dnn=l2_reg_dnn,
+        dnn_dropout=dnn_dropout,
+        seed=seed,
+        lora_reduce=lora_reduce,
+        num_experts=3,  # for example
+        # freeze_base=False, # optional
+    )([dnn_input, domain_input_layer])  # pass the same two inputs as before
+
+    # dnn_out = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, False, seed=seed,lora_reduce=lora_reduce)([dnn_input,domain_input_layer])
 
     dnn_logit = tf.keras.layers.Dense(
         1, use_bias=False, kernel_initializer=tf.keras.initializers.glorot_normal(seed))(dnn_out)

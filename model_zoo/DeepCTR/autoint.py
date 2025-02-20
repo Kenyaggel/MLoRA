@@ -17,6 +17,8 @@ from deepctr.layers.interaction import InteractingLayer
 from deepctr.layers.utils import concat_func, add_func, combined_dnn_input
 
 from model_zoo.DeepCTR.mlora import Mlora
+from model_zoo.lora_moe import MloraMoE
+
 
 def AutoInt(linear_feature_columns, dnn_feature_columns, n_domain, lora_reduce, att_layer_num=3, att_embedding_size=8, att_head_num=2,
             att_res=True,
@@ -67,16 +69,37 @@ def AutoInt(linear_feature_columns, dnn_feature_columns, n_domain, lora_reduce, 
 
     if len(dnn_hidden_units) > 0 and att_layer_num > 0:  # Deep & Interacting Layer
         # deep_out = DNN(dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, dnn_use_bn, seed=seed)(dnn_input)
-        deep_out = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, False, seed=seed,
-                        lora_reduce=lora_reduce)([dnn_input, domain_input_layer])
+        # deep_out = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, False, seed=seed,
+        #                 lora_reduce=lora_reduce)([dnn_input, domain_input_layer])
+        deep_out = MloraMoE(
+            n_domain=n_domain,
+            dnn_hidden_units=dnn_hidden_units,
+            activation=dnn_activation,
+            l2_reg_dnn=l2_reg_dnn,
+            dnn_dropout=dnn_dropout,
+            seed=seed,
+            lora_reduce=lora_reduce,
+            num_experts=lora_reduce*4  # Adjust number of experts as needed
+        )([dnn_input, domain_input_layer])
 
         stack_out = tf.keras.layers.Concatenate()([att_output, deep_out])
         final_logit = tf.keras.layers.Dense(
             1, use_bias=False, kernel_initializer=tf.keras.initializers.glorot_normal(seed))(stack_out)
     elif len(dnn_hidden_units) > 0:  # Only Deep
         # deep_out = DNN(dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, dnn_use_bn, seed=seed)(dnn_input, )
-        deep_out = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, False, seed=seed,
-                        lora_reduce=lora_reduce)([dnn_input, domain_input_layer])
+        # deep_out = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, False, seed=seed,
+                        # lora_reduce=lora_reduce)([dnn_input, domain_input_layer])
+        deep_out = MloraMoE(
+            n_domain=n_domain,
+            dnn_hidden_units=dnn_hidden_units,
+            activation=dnn_activation,
+            l2_reg_dnn=l2_reg_dnn,
+            dnn_dropout=dnn_dropout,
+            seed=seed,
+            lora_reduce=lora_reduce,
+            num_experts=lora_reduce*4 # Adjust number of experts as needed
+        )([dnn_input, domain_input_layer])
+
         final_logit = tf.keras.layers.Dense(
             1, use_bias=False, kernel_initializer=tf.keras.initializers.glorot_normal(seed))(deep_out)
     elif att_layer_num > 0:  # Only Interacting Layer
