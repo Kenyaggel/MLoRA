@@ -90,7 +90,7 @@ def AutoInt(linear_feature_columns, dnn_feature_columns, n_domain, lora_reduce, 
             1, use_bias=False, kernel_initializer=tf.keras.initializers.glorot_normal(seed))(stack_out)
     elif len(dnn_hidden_units) > 0:  # Only Deep
         # deep_out = DNN(dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, dnn_use_bn, seed=seed)(dnn_input, )
-        if num_experts <= 0:
+        if num_experts <= 1:
             deep_out = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, False, seed=seed,
                             lora_reduce=lora_reduce)([dnn_input, domain_input_layer])
         else:
