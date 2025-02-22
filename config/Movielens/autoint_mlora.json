@@ -10,6 +10,7 @@
     "item_dim": 8,
     "domain_dim": 8,
     "auxiliary_dim": 128,
+    "num_experts": 8,
     "hidden_dim": [
       256,
       128,

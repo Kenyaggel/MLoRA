@@ -20,7 +20,10 @@ class MloraMoE(layers.Layer):
                  use_bn=False,
                  seed=1024,
                  lora_reduce=4,
+                 lora_r = 4,
                  num_experts=2,  # << new: number of experts
+                 use_gate=True,  # New field
+                 expert_index=None,  # New field
                  **kwargs):
         super(MloraMoE, self).__init__(**kwargs)
 
@@ -32,7 +35,10 @@ class MloraMoE(layers.Layer):
         self.use_bn = use_bn
         self.seed = seed
         self.lora_reduce = lora_reduce
+        self.lora_r = lora_r
         self.num_experts = num_experts
+        self.use_gate = use_gate
+        self.expert_index = expert_index
 
         # We'll store sub-layers for gating network and the final dense layers
         self.gate_dense = None
@@ -76,19 +82,24 @@ class MloraMoE(layers.Layer):
             )
             self.W_base.append(W)
 
+            if self.lora_r < 1 and self.lora_reduce >= 1:
+                lora_r_layer = max(int(hidden_dim/self.lora_reduce), 1)
+            else:
+                lora_r_layer = self.lora_r
+
             # Experts for current layer
             A_experts = []
             B_experts = []
             for i in range(self.num_experts):
                 A = self.add_weight(
                     name=f'A_{layer_idx}_{i}',
-                    shape=(prev_dim, self.lora_reduce),
+                    shape=(prev_dim, lora_r_layer),
                     initializer='glorot_uniform',
                     trainable=True
                 )
                 B = self.add_weight(
                     name=f'B_{layer_idx}_{i}',
-                    shape=(self.lora_reduce, hidden_dim),
+                    shape=(lora_r_layer, hidden_dim),
                     initializer='zeros',
                     trainable=True
                 )
@@ -111,50 +122,102 @@ class MloraMoE(layers.Layer):
     def call(self, inputs, **kwargs):
         """
         inputs: [dnn_input, domain_input_layer]
-        - dnn_input: (batch_size, input_dim)
-        - domain_input_layer: (batch_size,) or an embedding
+          - dnn_input: (batch_size, input_dim)
+          - domain_input_layer: (batch_size,) or (batch_size, embedding_dim)
         """
         dnn_input, domain_input = inputs
-        # Suppose domain_input is (batch_size, ) domain IDs.
-        # If we want gating per-domain, we can embed them or convert them to one-hot.
-        # For demonstration, let's embed domain_input with a small Dense:
-        # If domain_input is already an embedding, skip this step.
-        # Embed domain ID to a small vector
+
+        # If domain_input is IDs, embed them (else skip if already an embedding)
         domain_emb = tf.keras.layers.Embedding(
-            input_dim=self.n_domain, output_dim=4)(domain_input)  # (batch_size, 4)
+            input_dim=self.n_domain, output_dim=4
+        )(domain_input)  # (batch_size, 4)
         domain_emb = tf.keras.layers.Flatten()(domain_emb)  # (batch_size, 4)
 
-        # Gating:
-        # Option 1) gating on domain_emb only
-        # Option 2) gating on [dnn_input, domain_emb]
-        # We'll pick domain_emb only, for clarity.
-        gate_scores = self.gate_dense(domain_emb)  # (batch_size, num_experts)
-        gate_scores = tf.expand_dims(gate_scores, axis=-1)  # => (batch_size, num_experts, 1)
+        # If using gating, compute gate scores once (or you can do layer-wise if you prefer)
+        gate_scores = None
+        if self.use_gate:
+            # For demonstration, gate on domain_emb only
+            gate_scores = self.gate_dense(domain_emb)  # (batch_size, num_experts)
+            gate_scores = tf.expand_dims(gate_scores, axis=-1)  # (batch_size, num_experts, 1)
 
-        # Pass through all hidden layers dynamically
+        # Forward pass through hidden layers
         x = dnn_input
         for layer_idx, hidden_dim in enumerate(self.dnn_hidden_units):
-            # Compute base output
+            # Backbone output
             base_out = tf.matmul(x, self.W_base[layer_idx])  # (batch_size, hidden_dim)
 
-            # Compute expert outputs
+            # Compute each expert
             expert_outputs = []
             for i in range(self.num_experts):
                 out_i = tf.matmul(x, self.experts_A[layer_idx][i])  # (batch_size, lora_reduce)
                 out_i = tf.matmul(out_i, self.experts_B[layer_idx][i])  # (batch_size, hidden_dim)
                 expert_outputs.append(out_i)
 
-            # Stack expert outputs and compute weighted sum
-            expert_outputs = tf.stack(expert_outputs, axis=1)  # (batch_size, num_experts, hidden_dim)
-            gate_scores_expanded = tf.tile(gate_scores, [1, 1, hidden_dim])  # (batch_size, num_experts, hidden_dim)
-            moe_out = tf.reduce_sum(expert_outputs * gate_scores_expanded, axis=1)  # (batch_size, hidden_dim)
+            if self.use_gate:
+                # Mixture of experts
+                expert_stack = tf.stack(expert_outputs, axis=1)  # (batch_size, num_experts, hidden_dim)
+                # Expand gate scores to match hidden_dim
+                gate_scores_expanded = tf.tile(gate_scores, [1, 1, hidden_dim])
+                moe_out = tf.reduce_sum(expert_stack * gate_scores_expanded, axis=1)
+                x = base_out + moe_out
+            else:
+                # No gating
+                if self.expert_index is not None:
+                    # Use backbone + the single expert
+                    x = base_out + expert_outputs[self.expert_index]
+                else:
+                    # Only backbone
+                    x = base_out
 
-            # Combine base output with MoE output
-            x = base_out + moe_out
-
-            # Apply activation and dropout
+            # Activation & Dropout
             x = tf.keras.layers.Activation(self.activation)(x)
             if self.dnn_dropout > 0:
                 x = tf.keras.layers.Dropout(self.dnn_dropout)(x)
 
+        # If you have post-layers, apply them here
+        for layer in self.post_layers:
+            x = layer(x)
+
         return x
+
+    ############################################################################
+    # Below are the methods to freeze/unfreeze different parts of this layer.  #
+    ############################################################################
+
+    def freeze_backbone(self, freeze=True):
+        """
+        Freeze or unfreeze the backbone weights (W_base).
+        freeze=True makes them non-trainable; freeze=False makes them trainable.
+        """
+        for w in self.W_base:
+            w._trainable = not freeze  # or w.trainable = not freeze (if Weight objects allow)
+
+    def freeze_gating(self, freeze=True):
+        """
+        Freeze or unfreeze the gating network (gate_dense).
+        """
+        self.gate_dense.trainable = not freeze
+
+    def freeze_experts(self, freeze=True):
+        """
+        Freeze or unfreeze ALL experts (A_i and B_i for each expert i, each layer).
+        """
+        for layer_idx in range(len(self.experts_A)):
+            for i in range(self.num_experts):
+                self.experts_A[layer_idx][i]._trainable = not freeze
+                self.experts_B[layer_idx][i]._trainable = not freeze
+
+    def freeze_expert(self, expert_index, freeze=True):
+        """
+        Freeze or unfreeze a specific expert across all layers.
+        """
+        for layer_idx in range(len(self.experts_A)):
+            self.experts_A[layer_idx][expert_index]._trainable = not freeze
+            self.experts_B[layer_idx][expert_index]._trainable = not freeze
+
+    def freeze_post_layers(self, freeze=True):
+        """
+        Freeze or unfreeze all post layers (the Dense/Dropout layers after the MoE).
+        """
+        for layer in self.post_layers:
+            layer.trainable = not freeze

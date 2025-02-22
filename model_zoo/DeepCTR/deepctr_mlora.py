@@ -19,7 +19,8 @@ from model_zoo.DeepCTR.deepfm import DeepFM
 from model_zoo.DeepCTR.dcn import DCN
 from model_zoo.DeepCTR.xdeepfm import xDeepFM
 from model_zoo.DeepCTR.fibinet import FiBiNET
-
+import time
+import random
 
 class DeepCTR_LORA(BaseModel):
     def __init__(self, dataset, config):
@@ -77,23 +78,53 @@ class DeepCTR_LORA(BaseModel):
                       metrics=[AUC(num_thresholds=500, name="AUC")])
         return model
 
-    def train(self):
-        # backend.get_session().run(tf.global_variables_initializer())
+    def reset_early_stop(self):
+        """Reset early stopping counters/flags."""
+        self.best_score = None
+        self.counter = 0
+        self.early_stop = False
 
-        train_sequence = list(range(self.n_domain))
+    def train(self, domain_ids=None, shuffle_domains=True):
+        """
+        Train the model for a specified number of epochs, optionally on a subset of domain IDs.
+
+        Args:
+            domain_ids (list[int] or None): A list of domain IDs to train on. If None, train on all domains.
+            shuffle_domains (bool): Whether to shuffle the order of the domain IDs each epoch.
+        """
+
+        # If no domain_ids are provided, default to all domains
+        if domain_ids is None:
+            train_sequence = list(range(self.n_domain))
+        else:
+            # Use only the specified domain IDs
+            train_sequence = domain_ids
+
         lock = False
         for epoch in range(self.train_config['epoch']):
             print("Epoch: {}".format(epoch), "-" * 30)
-            # Train
-            random.shuffle(train_sequence)
+
+            # Shuffle the domain IDs if requested
+            if shuffle_domains:
+                random.shuffle(train_sequence)
+
+            # Train on each domain in train_sequence
             for idx in train_sequence:
                 d = self.dataset.train_dataset[idx]
                 print("Train on: Domain {}".format(idx))
+
                 old_time = time.time()
-                self.model.fit(d['data'], steps_per_epoch=d['n_step'], verbose=0, callbacks=[],
-                               epochs=epoch + 1, initial_epoch=epoch)
+                self.model.fit(
+                    d['data'],
+                    steps_per_epoch=d['n_step'],
+                    verbose=0,
+                    callbacks=[],
+                    epochs=epoch + 1,
+                    initial_epoch=epoch
+                )
                 print("Training time: ", time.time() - old_time)
-            # Val
+
+            # Validation
             print("Val Result: ")
             avg_loss, avg_auc, domain_loss, domain_auc = self.val_and_test("val")
             # Early Stopping
@@ -104,11 +135,11 @@ class DeepCTR_LORA(BaseModel):
             print("Test Result: ")
             test_avg_loss, test_avg_auc, test_domain_loss, test_domain_auc = self.val_and_test("test")
 
-            # Lock the graph for better performance
-            if not lock:
-                graph = tf.get_default_graph()
-                graph.finalize()
-                lock = True
+            # Lock the graph for better performance after first epoch
+            # if not lock:
+            #     graph = tf.get_default_graph()
+            #     graph.finalize()
+            #     lock = True
 
     def build_inputs(self):
         user_feat = self.build_emb("uid", "user_emb", self.n_uid, self.model_config['user_dim'],
