@@ -17,12 +17,13 @@ from deepctr.layers.core import PredictionLayer, DNN
 from deepctr.layers.interaction import CrossNet
 from deepctr.layers.utils import add_func, combined_dnn_input
 from model_zoo.DeepCTR.mlora import Mlora
+from model_zoo.lora_moe import MloraMoE
 
 
 def DCN(linear_feature_columns, dnn_feature_columns, n_domain, lora_reduce, cross_num=2, cross_parameterization='vector',
         dnn_hidden_units=(256, 128, 64), l2_reg_linear=1e-5, l2_reg_embedding=1e-5,
         l2_reg_cross=1e-5, l2_reg_dnn=0, seed=1024, dnn_dropout=0, dnn_use_bn=False,
-        dnn_activation='relu', task='binary'):
+        dnn_activation='relu', task='binary', num_experts=4):
     """Instantiates the Deep&Cross Network architecture.
 
     :param linear_feature_columns: An iterable containing all the features used by linear part of the model.
@@ -57,13 +58,21 @@ def DCN(linear_feature_columns, dnn_feature_columns, n_domain, lora_reduce, cros
     dnn_input = combined_dnn_input(sparse_embedding_list, dense_value_list)
 
     if len(dnn_hidden_units) > 0 and cross_num > 0:  # Deep & Cross
-        deep_out = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, dnn_use_bn, seed=seed, lora_reduce = lora_reduce)([dnn_input, domain_input_layer])
+        if num_experts <= 1:
+            deep_out = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, dnn_use_bn, seed=seed, lora_reduce = lora_reduce)([dnn_input, domain_input_layer])
+        else:
+            deep_out = MloraMoE(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, dnn_use_bn, seed=seed, lora_reduce=lora_reduce, num_experts=num_experts)([dnn_input, domain_input_layer])
+
         cross_out = CrossNet(cross_num, parameterization=cross_parameterization, l2_reg=l2_reg_cross)(dnn_input)
         stack_out = tf.keras.layers.Concatenate()([cross_out, deep_out])
         final_logit = tf.keras.layers.Dense(
             1, use_bias=False, kernel_initializer=tf.keras.initializers.glorot_normal(seed))(stack_out)
     elif len(dnn_hidden_units) > 0:  # Only Deep
-        deep_out = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, dnn_use_bn, seed=seed, lora_reduce = lora_reduce)([dnn_input, domain_input_layer])
+        if num_experts <= 1:
+            deep_out = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, dnn_use_bn, seed=seed, lora_reduce = lora_reduce)([dnn_input, domain_input_layer])
+        else:
+            deep_out = MloraMoE(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, dnn_use_bn, seed=seed, lora_reduce=lora_reduce, num_experts=num_experts)([dnn_input, domain_input_layer])
+
         final_logit = tf.keras.layers.Dense(
             1, use_bias=False, kernel_initializer=tf.keras.initializers.glorot_normal(seed))(deep_out)
     elif cross_num > 0:  # Only Cross

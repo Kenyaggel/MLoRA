@@ -37,36 +37,36 @@ class DeepCTR_LORA(BaseModel):
         elif "wdl" in self.model_config['name']:
             model = WDL(linear_feature_columns, dnn_feature_columns,self.n_domain,self.model_config['lora_reduce'],
                                dnn_hidden_units=self.model_config['hidden_dim'],
-                               dnn_dropout=self.model_config['dropout'],
+                               dnn_dropout=self.model_config['dropout'], num_experts=self.model_config['num_experts']
                                )
         elif "nfm" in self.model_config['name']:
             model = NFM(linear_feature_columns, dnn_feature_columns,self.n_domain,self.model_config['lora_reduce'],
                                dnn_hidden_units=self.model_config['hidden_dim'],
-                               dnn_dropout=self.model_config['dropout'])
+                               dnn_dropout=self.model_config['dropout'], num_experts=self.model_config['num_experts'])
         elif "autoint" in self.model_config['name']:
             model = AutoInt(linear_feature_columns, dnn_feature_columns,self.n_domain,self.model_config['lora_reduce'],
                                    dnn_hidden_units=self.model_config['hidden_dim'], att_head_num=4,
                                    dnn_dropout=self.model_config['dropout'], num_experts=self.model_config['num_experts'])
         elif "pnn" in self.model_config['name']:
             model = PNN(dnn_feature_columns, self.n_domain,self.model_config['lora_reduce'], dnn_hidden_units=self.model_config['hidden_dim'],
-                               dnn_dropout=self.model_config['dropout'])
+                               dnn_dropout=self.model_config['dropout'], num_experts=self.model_config['num_experts'])
         elif "deepfm" in self.model_config['name']:
             model = DeepFM(linear_feature_columns, dnn_feature_columns, self.n_domain,self.model_config['lora_reduce'],
                                   dnn_hidden_units=self.model_config['hidden_dim'],
-                                  dnn_dropout=self.model_config['dropout'])
+                                  dnn_dropout=self.model_config['dropout'], num_experts=self.model_config['num_experts'])
         elif "dcn" in self.model_config['name']:
             model = DCN(linear_feature_columns, dnn_feature_columns, self.n_domain,self.model_config['lora_reduce'],
                                   dnn_hidden_units=self.model_config['hidden_dim'],
-                                  dnn_dropout=self.model_config['dropout'])
+                                  dnn_dropout=self.model_config['dropout'], num_experts=self.model_config['num_experts'])
         elif "xdeepfm" in self.model_config['name']:
             model = xDeepFM(linear_feature_columns, dnn_feature_columns, self.n_domain, self.model_config['lora_reduce'],
                                   dnn_hidden_units=self.model_config['hidden_dim'],
-                                  dnn_dropout=self.model_config['dropout'])
+                                  dnn_dropout=self.model_config['dropout'], num_experts=self.model_config['num_experts'])
         elif "fibinet" in self.model_config['name']:
             model = FiBiNET(linear_feature_columns, dnn_feature_columns, self.n_domain,
                             self.model_config['lora_reduce'],
                             dnn_hidden_units=self.model_config['hidden_dim'],
-                            dnn_dropout=self.model_config['dropout'])
+                            dnn_dropout=self.model_config['dropout'], num_experts=self.model_config['num_experts'])
         model.summary()
         # Optimization
         if self.train_config['optimizer'] == 'adam':

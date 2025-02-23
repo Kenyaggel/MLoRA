@@ -5,6 +5,7 @@
     "dense": "dense",
     "lora_r": -1,
     "lora_reduce":16,
+    "num_experts": 8,
     "auxiliary_net": false,
     "user_dim": 8,
     "item_dim": 8,

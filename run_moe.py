@@ -205,7 +205,8 @@ def main(config):
 
     # Save final results
     model.save_result(avg_loss, avg_auc, domain_loss, domain_auc)
-    return avg_loss, avg_auc, domain_loss, domain_auc
+    w_auc = model._weighted_auc("test", domain_auc)
+    return avg_loss, avg_auc, domain_loss, domain_auc, w_auc
 
 
 if __name__ == "__main__":

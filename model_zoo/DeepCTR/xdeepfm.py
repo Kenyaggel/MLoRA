@@ -13,12 +13,13 @@ from deepctr.layers.core import PredictionLayer, DNN
 from deepctr.layers.interaction import CIN
 from deepctr.layers.utils import concat_func, add_func, combined_dnn_input
 from model_zoo.DeepCTR.mlora import Mlora
+from model_zoo.lora_moe import MloraMoE
 
 
 def xDeepFM(linear_feature_columns, dnn_feature_columns, n_domain, lora_reduce, dnn_hidden_units=(256, 128, 64),
             cin_layer_size=(128, 128,), cin_split_half=True, cin_activation='relu', l2_reg_linear=0.00001,
             l2_reg_embedding=0.00001, l2_reg_dnn=0, l2_reg_cin=0, seed=1024, dnn_dropout=0,
-            dnn_activation='relu', dnn_use_bn=False, task='binary'):
+            dnn_activation='relu', dnn_use_bn=False, task='binary', num_experts=4):
     """Instantiates the xDeepFM architecture.
 
     :param linear_feature_columns: An iterable containing all the features used by linear part of the model.
@@ -55,7 +56,10 @@ def xDeepFM(linear_feature_columns, dnn_feature_columns, n_domain, lora_reduce, 
 
     dnn_input = combined_dnn_input(sparse_embedding_list, dense_value_list)
     # dnn_output = DNN(dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, dnn_use_bn, seed=seed)(dnn_input)
-    dnn_output = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, dnn_use_bn, seed=seed, lora_reduce = lora_reduce)([dnn_input,domain_input_layer])
+    if num_experts <= 1:
+        dnn_output = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, dnn_use_bn, seed=seed, lora_reduce = lora_reduce)([dnn_input,domain_input_layer])
+    else:
+        dnn_output = MloraMoE(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, dnn_use_bn, seed=seed, lora_reduce = lora_reduce, num_experts=num_experts)([dnn_input,domain_input_layer])
     dnn_logit = tf.keras.layers.Dense(
         1, use_bias=False, kernel_initializer=tf.keras.initializers.glorot_normal(seed))(dnn_output)
 
