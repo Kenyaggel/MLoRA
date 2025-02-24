@@ -36,8 +36,7 @@ def run_experiments(datasets, models, param_changes=None, csv_filename="results.
         param_keys = []
 
     # CSV columns:
-    # dataset, model, <one column per param_changes key>, avg_loss, avg_auc, domain_loss, domain_auc
-    header = ["dataset", "model"]
+    header = ["dataset", "model", "config_path"]
     # For each parameter key (like "model.num_expart"), turn it into something like "model_num_expart"
     header += [k.replace('.', '_') for k in param_keys]
     header += ["avg_loss", "avg_auc", "domain_loss", "domain_auc", "w_auc"]
@@ -69,10 +68,12 @@ def run_experiments(datasets, models, param_changes=None, csv_filename="results.
                     avg_loss, avg_auc, domain_loss, domain_auc, w_auc = main(base_config)
 
                     # Write one row to the CSV
-                    row_data = [dataset, model_name]
+                    row_data = [dataset, model_name, config_path]
+                    row_data += [None] * len(param_keys)
                     # No param keys here
                     row_data += [avg_loss, avg_auc, domain_loss, domain_auc, w_auc]
                     writer.writerow(row_data)
+                    csv_file.flush()
 
 
                 else:
@@ -130,12 +131,10 @@ def run_experiments(datasets, models, param_changes=None, csv_filename="results.
                         avg_loss, avg_auc, domain_loss, domain_auc, w_auc = main(config)
 
                         # Write the run's results into the CSV.
-
                         row_data = [dataset, model_name, temp_config_path] + list(combo)
-
                         row_data += [avg_loss, avg_auc, domain_loss, domain_auc, w_auc]
-
                         writer.writerow(row_data)
+                        csv_file.flush()  # update file after each run
 
     print(f"\nAll runs complete! Results written to '{csv_filename}'.\n")
 
@@ -150,10 +149,27 @@ if __name__ == "__main__":
     param_changes = {
         "model.num_expart": [2],
         # "lora_reduce": [2, 4, 8],
-        "dataset.domain_split_path": ["split_by_gender", "split_by_age", "split_by_occupation"],
+        "dataset.domain_split_path": ["split_by_gender"] #, "split_by_age", "split_by_occupation"],
     }
-    # You might want to include a timestamp for the CSV filename.
+    # include a timestamp for the CSV filename.
     from datetime import datetime
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
+
+    param_changes = {
+        "model.num_expart": [7],
+        # "lora_reduce": [2, 4, 8],
+        "dataset.domain_split_path": ["split_by_age"]
+    }
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
+
+    # param_changes = {
+    #     "model.num_expart": [21],
+    #     # "lora_reduce": [2, 4, 8],
+    #     "dataset.domain_split_path": ["split_by_occupation"]
+    # }
+    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv",
+    #                 temp_dir="config/temp_configs")
