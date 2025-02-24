@@ -66,7 +66,7 @@ def run_experiments(datasets, models, param_changes=None, csv_filename="results.
                 # If no param_changes specified, just run once with the base config
                 if not param_keys:
                     print(f"\n=== Running: dataset={dataset}, model={model_name} ===")
-                    if config.model.num_expart == -1:
+                    if config['model']['num_experts'] == -1:
                         avg_loss, avg_auc, domain_loss, domain_auc, w_auc = run.main(config)
                     else:
                         avg_loss, avg_auc, domain_loss, domain_auc, w_auc = main(config)
@@ -112,7 +112,8 @@ def run_experiments(datasets, models, param_changes=None, csv_filename="results.
 
                         print(f"\n=== Running: dataset={dataset}, model={model_name}, params: {combo_str} ===")
 
-                        if config.model.num_expart == -1:
+                        if config['model']['num_experts'] == -1:
+                            print("Run MLoRA original")
                             avg_loss, avg_auc, domain_loss, domain_auc, w_auc = run.main(config)
                         else:
                             avg_loss, avg_auc, domain_loss, domain_auc, w_auc = main(config)
@@ -134,7 +135,7 @@ if __name__ == "__main__":
     # {"model.num_expart": [8, 16], "training.learning_rate": [0.001, 0.0001]}
     # If you have no sweeps, you can pass None or an empty dict.
     param_changes = {
-        "model.num_expart": [2],
+        "model.num_experts": [-1, 2],
         # "lora_reduce": [2, 4, 8],
         "dataset.domain_split_path": ["split_by_gender"] #, "split_by_age", "split_by_occupation"],
     }
@@ -142,10 +143,10 @@ if __name__ == "__main__":
     from datetime import datetime
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
+    run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
 
     param_changes = {
-        "model.num_expart": [-1, 7],
+        "model.num_experts": [-1, 7],
         # "lora_reduce": [2, 4, 8],
         "dataset.domain_split_path": ["split_by_age"]
     }
@@ -153,7 +154,7 @@ if __name__ == "__main__":
     run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
 
     param_changes = {
-        "model.num_expart": [-1, 21],
+        "model.num_experts": [-1, 21],
         # "lora_reduce": [2, 4, 8],
         "dataset.domain_split_path": ["split_by_occupation"]
     }
@@ -161,7 +162,7 @@ if __name__ == "__main__":
     run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
 
     param_changes = {
-        "model.num_expart": [10]
+        "model.num_experts": [10]
     }
     datasets = ["Taobao_10"]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

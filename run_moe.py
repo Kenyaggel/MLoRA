@@ -109,6 +109,7 @@ def main(config):
     sess.run(tf.global_variables_initializer())
 
     options = tf.profiler.ProfileOptionBuilder.float_operation()
+    options['output'] = 'none'  # Redirect output to nowhere
     flops = tf.profiler.profile(sess.graph,options=options)
     print("FLOPS:", flops.total_float_ops)
     sess.close()
@@ -211,7 +212,7 @@ def main(config):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, help="Train config file", required=False, default="config/Movielens/autoint_mlora.json")
+    parser.add_argument("--config", type=str, help="Train config file", required=False, default="config/Movielens/nfm_mlora.json")
     args = parser.parse_args()
     # Load config
     with open(args.config, 'r') as f:
