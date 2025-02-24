@@ -99,33 +99,41 @@ def main(config):
         pretrained_model = model
         if 'mlora_freeze' in config['model']['dense']:
             model = MLoRA(dataset, config)
+        print("Pretrained Model: ")
         for pre_layer in pretrained_model.model.layers:
-            print(pre_layer.name)
+            print(pre_layer.name, len(pre_layer.get_weights()))
+        print("Current Model: ")
         for layer in model.model.layers:
-            print(layer.name)
+            print(layer.name, len(layer.get_weights()))
 
         # According to the import weights of different finetune policies, the parameters and layer.name that need to be imported are different in different schemes
         if 'mlora_freeze' in config['model']['dense']:
             for pre_layer in pretrained_model.model.layers:
                 for layer in model.model.layers:
                     if layer_matching(pre_layer.name, layer.name):
+                        print("Importing Weights from Layer: ", pre_layer.name)
                         if pre_layer.name in ['m_lo_rafcn', 'm_lo_rafcn_1', 'm_lo_rafcn_2']:
                             weights = pre_layer.get_weights()[2:] + pre_layer.get_weights()[:2]
                             model.model.get_layer(layer.name).set_weights(weights)
-                        else:
+                        elif len(pre_layer.get_weights()) == len(layer.get_weights()):
                             model.model.get_layer(layer.name).set_weights(pre_layer.get_weights())
-
+                        else:
+                            print("Mismatched Weights: ", pre_layer.name, layer.name)
+                            weights = pre_layer.get_weights()[:len(layer.get_weights())]
+                            # model.model.get_layer(layer.name).set_weights(weights)
         model.train()
 
 
-    model.save_result(avg_loss, avg_auc, domain_loss, domain_auc)
 
-    return avg_loss, avg_auc, domain_loss, domain_auc
+    model.save_result(avg_loss, avg_auc, domain_loss, domain_auc)
+    w_auc = model._weighted_auc("test", domain_auc)
+
+    return avg_loss, avg_auc, domain_loss, domain_auc, w_auc
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, help="Train config file", required=False, default="config/Movielens/wdl_mlora.json")
+    parser.add_argument("--config", type=str, help="Train config file", required=False, default="config/Movielens/autoint_mlora.json")
     args = parser.parse_args()
     # Load config
     with open(args.config, 'r') as f:

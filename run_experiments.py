@@ -6,6 +6,7 @@ from itertools import product
 
 from tensorflow import timestamp
 
+import run
 # 1) Import the main function from train.py
 from run_moe import main
 
@@ -65,7 +66,10 @@ def run_experiments(datasets, models, param_changes=None, csv_filename="results.
                 # If no param_changes specified, just run once with the base config
                 if not param_keys:
                     print(f"\n=== Running: dataset={dataset}, model={model_name} ===")
-                    avg_loss, avg_auc, domain_loss, domain_auc, w_auc = main(base_config)
+                    if config.model.num_expart == -1:
+                        avg_loss, avg_auc, domain_loss, domain_auc, w_auc = run.main(config)
+                    else:
+                        avg_loss, avg_auc, domain_loss, domain_auc, w_auc = main(config)
 
                     # Write one row to the CSV
                     row_data = [dataset, model_name, config_path]
@@ -74,61 +78,44 @@ def run_experiments(datasets, models, param_changes=None, csv_filename="results.
                     row_data += [avg_loss, avg_auc, domain_loss, domain_auc, w_auc]
                     writer.writerow(row_data)
                     csv_file.flush()
-
-
                 else:
 
                     # Prepare lists of values for each parameter key.
-
                     values_lists = []
 
                     for key in param_keys:
-
                         value = param_changes[key]
-
                         if not isinstance(value, list):
                             value = [value]
-
                         values_lists.append(value)
 
                     # Iterate over all combinations of parameter values.
-
                     for combo in product(*values_lists):
-
                         # Create a deep copy of the base config.
-
                         config = copy.deepcopy(base_config)
-
                         # Update the config based on the current combination.
-
                         for k, v in zip(param_keys, combo):
-
                             parts = k.split('.')
-
                             d = config
-
                             for part in parts[:-1]:
                                 d = d[part]
-
                             d[parts[-1]] = v
 
                         # Create a unique temporary config filename.
-
                         combo_str = "_".join(f"{k.split('.')[-1]}_{v}" for k, v in zip(param_keys, combo))
-
                         temp_config_name = f"{dataset}_{model_name}_{combo_str}.json"
-
                         temp_config_path = os.path.join(temp_dir, temp_config_name)
 
                         # Write the updated config to the temporary file.
-
                         with open(temp_config_path, "w") as f:
-
                             json.dump(config, f, indent=2)
 
                         print(f"\n=== Running: dataset={dataset}, model={model_name}, params: {combo_str} ===")
 
-                        avg_loss, avg_auc, domain_loss, domain_auc, w_auc = main(config)
+                        if config.model.num_expart == -1:
+                            avg_loss, avg_auc, domain_loss, domain_auc, w_auc = run.main(config)
+                        else:
+                            avg_loss, avg_auc, domain_loss, domain_auc, w_auc = main(config)
 
                         # Write the run's results into the CSV.
                         row_data = [dataset, model_name, temp_config_path] + list(combo)
@@ -155,21 +142,27 @@ if __name__ == "__main__":
     from datetime import datetime
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
+    # run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
 
     param_changes = {
-        "model.num_expart": [7],
+        "model.num_expart": [-1, 7],
         # "lora_reduce": [2, 4, 8],
         "dataset.domain_split_path": ["split_by_age"]
     }
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
 
-    # param_changes = {
-    #     "model.num_expart": [21],
-    #     # "lora_reduce": [2, 4, 8],
-    #     "dataset.domain_split_path": ["split_by_occupation"]
-    # }
-    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv",
-    #                 temp_dir="config/temp_configs")
+    param_changes = {
+        "model.num_expart": [-1, 21],
+        # "lora_reduce": [2, 4, 8],
+        "dataset.domain_split_path": ["split_by_occupation"]
+    }
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
+
+    param_changes = {
+        "model.num_expart": [10]
+    }
+    datasets = ["Taobao_10"]
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_Taobao_10_{timestamp}.csv", temp_dir="config/temp_configs")
