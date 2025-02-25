@@ -1,6 +1,6 @@
 import tensorflow as tf
 from tensorflow.python.keras import layers
-
+from deepctr.layers.activation import activation_layer
 
 class MloraMoE(layers.Layer):
     """
@@ -39,27 +39,19 @@ class MloraMoE(layers.Layer):
         self.num_experts = num_experts
         self.use_gate = use_gate
         self.expert_index = expert_index
+        self.activation_layers = []
 
         # We'll store sub-layers for gating network and the final dense layers
         self.gate_dense = None
         self.experts_A = []
         self.experts_B = []
         self.W_base = []
+        self.b_base = []  # base bias for each layer
         self.built_experts = False  # we will build them once input shape is known.
+        # Domain-specific bias (one per layer), shape = (n_domain, hidden_dim)
+        self.lora_bias = []
 
-        # If you also want hidden layers after the MoE, you can define them here:
-        self.post_layers = []
-        for i, unit in enumerate(dnn_hidden_units):
-            self.post_layers.append(
-                tf.keras.layers.Dense(
-                    unit,
-                    activation=self.activation,
-                    kernel_regularizer=tf.keras.regularizers.l2(self.l2_reg_dnn),
-                    name=f"post_dense_{i}"
-                )
-            )
-            if dnn_dropout > 0:
-                self.post_layers.append(tf.keras.layers.Dropout(self.dnn_dropout))
+
 
     def build(self, input_shape):
         """
@@ -82,6 +74,16 @@ class MloraMoE(layers.Layer):
             )
             self.W_base.append(W)
 
+            # Base bias
+            b = self.add_weight(
+                name=f'b_base_{layer_idx}',
+                shape=(hidden_dim,),
+                initializer='zeros',
+                trainable=True
+            )
+            self.b_base.append(b)
+            print("lora_r", self.lora_r)
+            print("lora_reduce", self.lora_reduce)
             if self.lora_r < 1 and self.lora_reduce >= 1:
                 lora_r_layer = max(int(hidden_dim/self.lora_reduce), 1)
             else:
@@ -90,6 +92,7 @@ class MloraMoE(layers.Layer):
             # Experts for current layer
             A_experts = []
             B_experts = []
+            lora_biases = []
             for i in range(self.num_experts):
                 A = self.add_weight(
                     name=f'A_{layer_idx}_{i}',
@@ -103,14 +106,26 @@ class MloraMoE(layers.Layer):
                     initializer='zeros',
                     trainable=True
                 )
+                # Domain-specific bias for each layer: shape = (n_domain, hidden_dim)
+                lora_b = self.add_weight(
+                    name=f'b_lora_{layer_idx}_{i}',
+                    shape=(hidden_dim),
+                    initializer='zeros',
+                    trainable=True
+                )
                 A_experts.append(A)
                 B_experts.append(B)
+                lora_biases.append(lora_b)
 
             self.experts_A.append(A_experts)
             self.experts_B.append(B_experts)
+            self.lora_bias.append(lora_biases)
 
             prev_dim = hidden_dim  # Update for next layer
 
+        self.dropout_layers = [tf.keras.layers.Dropout(self.dnn_dropout, seed=self.seed + i) for i in
+                               range(len(self.dnn_hidden_units))]
+        self.activation_layers = [activation_layer(self.activation) for _ in range(len(self.dnn_hidden_units))]
         # Define the gating network
         self.gate_dense = tf.keras.layers.Dense(
             self.num_experts, activation='softmax', name='moe_gate'
@@ -119,7 +134,7 @@ class MloraMoE(layers.Layer):
         self.built_experts = True
         super(MloraMoE, self).build(input_shape)
 
-    def call(self, inputs, **kwargs):
+    def call(self, inputs, training=None, **kwargs):
         """
         inputs: [dnn_input, domain_input_layer]
           - dnn_input: (batch_size, input_dim)
@@ -140,17 +155,37 @@ class MloraMoE(layers.Layer):
             gate_scores = self.gate_dense(domain_emb)  # (batch_size, num_experts)
             gate_scores = tf.expand_dims(gate_scores, axis=-1)  # (batch_size, num_experts, 1)
 
+        # print("lora bias", self.lora_bias)
+        # print("experts_A", self.experts_A)
+        # print("experts_B", self.experts_B)
+        # print("W_base", self.W_base)
+        # print("b_base", self.b_base)
+        # print("domain_input", domain_input)
         # Forward pass through hidden layers
         x = dnn_input
         for layer_idx, hidden_dim in enumerate(self.dnn_hidden_units):
             # Backbone output
             base_out = tf.matmul(x, self.W_base[layer_idx])  # (batch_size, hidden_dim)
+            base_out = tf.nn.bias_add(base_out, self.b_base[layer_idx])
+            base_out = self.dropout_layers[layer_idx](base_out,training=training)
 
             # Compute each expert
             expert_outputs = []
             for i in range(self.num_experts):
                 out_i = tf.matmul(x, self.experts_A[layer_idx][i])  # (batch_size, lora_reduce)
                 out_i = tf.matmul(out_i, self.experts_B[layer_idx][i])  # (batch_size, hidden_dim)
+                # domain_bias = tf.nn.embedding_lookup(self.lora_bias[layer_idx][i], domain_input)
+                # out_i = out_i + domain_bias  # shape (batch_size, hidden_dim)
+                # print("domain_input", domain_input)
+                # print("domain_emb", domain_emb)
+                # print("lora_bias", self.lora_bias[layer_idx][i])
+                # print("A", self.experts_A[layer_idx][i].shape)
+                # print("B", self.experts_B[layer_idx][i].shape)
+                # if layer_idx < len(self.dnn_hidden_units) - 1:
+                out_i = tf.nn.bias_add(out_i, self.lora_bias[layer_idx][i])
+                # else:
+                #
+                #     out_i = tf.nn.bias_add(out_i, self.lora_bias[layer_idx+1][i])  # shape (batch_size, hidden_dim)
                 expert_outputs.append(out_i)
 
             if self.use_gate:
@@ -169,14 +204,18 @@ class MloraMoE(layers.Layer):
                     # Only backbone
                     x = base_out
 
-            # Activation & Dropout
-            x = tf.keras.layers.Activation(self.activation)(x)
-            if self.dnn_dropout > 0:
-                x = tf.keras.layers.Dropout(self.dnn_dropout)(x)
+            # # Activation & Dropout
+            # x = tf.keras.layers.Activation(self.activation)(x)
+            try:
+                x = self.activation_layers[layer_idx](x, training=training)
+            except TypeError as e:  # TypeError: call() got an unexpected keyword argument 'training'
+                print("make sure the activation function use training flag properly", e)
+                x = self.activation_layers[layer_idx](x)
 
-        # If you have post-layers, apply them here
-        for layer in self.post_layers:
-            x = layer(x)
+
+            # if self.dnn_dropout > 0:
+            #     x = tf.keras.layers.Dropout(self.dnn_dropout)(x)
+
 
         return x
 
@@ -214,10 +253,3 @@ class MloraMoE(layers.Layer):
         for layer_idx in range(len(self.experts_A)):
             self.experts_A[layer_idx][expert_index]._trainable = not freeze
             self.experts_B[layer_idx][expert_index]._trainable = not freeze
-
-    def freeze_post_layers(self, freeze=True):
-        """
-        Freeze or unfreeze all post layers (the Dense/Dropout layers after the MoE).
-        """
-        for layer in self.post_layers:
-            layer.trainable = not freeze

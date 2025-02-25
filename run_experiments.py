@@ -2,9 +2,10 @@ import os
 import json
 import copy
 import csv
+import random
+import time
 from itertools import product
-
-from tensorflow import timestamp
+# from tensorflow import timestamp
 
 import run
 # 1) Import the main function from train.py
@@ -126,44 +127,58 @@ def run_experiments(datasets, models, param_changes=None, csv_filename="results.
 
     print(f"\nAll runs complete! Results written to '{csv_filename}'.\n")
 
-if __name__ == "__main__":
-    datasets = ["Movielens"] #, "Amazon_6"]
-    models = ["autoint", "wdl", "deepfm", "nfm", "pnn", "dcn", "xdeepfm", "fibinet"]
-    mlora_models = [m + "_mlora" for m in models]
 
-    # You can define hyperparameter sweeps. For instance:
-    # {"model.num_expart": [8, 16], "training.learning_rate": [0.001, 0.0001]}
-    # If you have no sweeps, you can pass None or an empty dict.
-    param_changes = {
-        "model.num_experts": [-1, 2],
-        # "lora_reduce": [2, 4, 8],
-        "dataset.domain_split_path": ["split_by_gender"] #, "split_by_age", "split_by_occupation"],
-    }
+def create_experiment(datasets, models, param_changes):
     # include a timestamp for the CSV filename.
     from datetime import datetime
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
+    return run_experiments(datasets, models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
 
-    param_changes = {
-        "model.num_experts": [-1, 7],
-        # "lora_reduce": [2, 4, 8],
-        "dataset.domain_split_path": ["split_by_age"]
-    }
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
 
-    param_changes = {
-        "model.num_experts": [-1, 21],
-        # "lora_reduce": [2, 4, 8],
-        "dataset.domain_split_path": ["split_by_occupation"]
-    }
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
+if __name__ == "__main__":
+    datasets = ["Movielens"] #, "Amazon_6"]
+    models = ["autoint", "wdl", "deepfm", "nfm", "pnn", "dcn", "xdeepfm", "fibinet"]
+    mlora_models = [m + "_mlora" for m in models]
+    import sys
 
-    param_changes = {
-        "model.num_experts": [10]
-    }
-    datasets = ["Taobao_10"]
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # run_experiments(datasets, mlora_models, param_changes, csv_filename=f"result/results_Taobao_10_{timestamp}.csv", temp_dir="config/temp_configs")
+    jobid_str = os.getenv('SLURM_ARRAY_TASK_ID')
+    # Convert the jobid to an integer if it exists, otherwise default to 1.
+    jobid = int(jobid_str) if jobid_str is not None else 1
+    print(f"Running job {jobid}")
+
+    # Introduce a random sleep between 0 and 10 seconds, scaled by jobid
+    sleep_time = random.uniform(0, 5) + (jobid % 3)  # Random delay with a slight job-based offset
+    print(f"Sleeping for {sleep_time:.2f} seconds before starting...")
+    time.sleep(sleep_time)
+
+    if jobid == 1:
+        param_changes = {
+            "model.num_experts": [-1, 2],
+            # "lora_reduce": [2, 4, 8],
+            "dataset.domain_split_path": ["split_by_gender"] #, "split_by_age", "split_by_occupation"],
+        }
+        create_experiment(datasets, mlora_models, param_changes)
+    if jobid == 2:
+        param_changes = {
+            "model.num_experts": [-1, 7],
+            # "lora_reduce": [2, 4, 8],
+            "dataset.domain_split_path": ["split_by_age"]
+        }
+        create_experiment(datasets, mlora_models, param_changes)
+
+    if jobid == 3:
+        param_changes = {
+            "model.num_experts": [-1, 21],
+            # "lora_reduce": [2, 4, 8],
+            "dataset.domain_split_path": ["split_by_occupation"]
+        }
+        create_experiment(datasets, mlora_models, param_changes)
+
+    if jobid == 4:
+        param_changes = {
+            "model.num_experts": [-1, 10],
+            "dataset.domain_split_path": ["split_by_theme_10"]
+        }
+        datasets = ["Taobao_10"]
+        create_experiment(datasets, mlora_models, param_changes)

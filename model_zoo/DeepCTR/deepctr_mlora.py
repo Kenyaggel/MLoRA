@@ -67,7 +67,7 @@ class DeepCTR_LORA(BaseModel):
                             self.model_config['lora_reduce'],
                             dnn_hidden_units=self.model_config['hidden_dim'],
                             dnn_dropout=self.model_config['dropout'], num_experts=self.model_config['num_experts'])
-        model.summary()
+        # model.summary()
         # Optimization
         if self.train_config['optimizer'] == 'adam':
             opt = train.AdamOptimizer(learning_rate=self.train_config['learning_rate'])

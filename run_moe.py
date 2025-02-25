@@ -212,7 +212,7 @@ def main(config):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, help="Train config file", required=False, default="config/Movielens/nfm_mlora.json")
+    parser.add_argument("--config", type=str, help="Train config file", required=False, default="config/Movielens/autoint_mlora.json")
     args = parser.parse_args()
     # Load config
     with open(args.config, 'r') as f:
