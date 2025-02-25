@@ -20,7 +20,7 @@ class MloraMoE(layers.Layer):
                  use_bn=False,
                  seed=1024,
                  lora_reduce=4,
-                 lora_r = 4,
+                 lora_r = -1,
                  num_experts=2,  # << new: number of experts
                  use_gate=True,  # New field
                  expert_index=None,  # New field
@@ -82,8 +82,8 @@ class MloraMoE(layers.Layer):
                 trainable=True
             )
             self.b_base.append(b)
-            print("lora_r", self.lora_r)
-            print("lora_reduce", self.lora_reduce)
+            # print("lora_r", self.lora_r)
+            # print("lora_reduce", self.lora_reduce)
             if self.lora_r < 1 and self.lora_reduce >= 1:
                 lora_r_layer = max(int(hidden_dim/self.lora_reduce), 1)
             else:
