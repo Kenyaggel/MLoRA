@@ -181,11 +181,7 @@ class MloraMoE(layers.Layer):
                 # print("lora_bias", self.lora_bias[layer_idx][i])
                 # print("A", self.experts_A[layer_idx][i].shape)
                 # print("B", self.experts_B[layer_idx][i].shape)
-                # if layer_idx < len(self.dnn_hidden_units) - 1:
                 out_i = tf.nn.bias_add(out_i, self.lora_bias[layer_idx][i])
-                # else:
-                #
-                #     out_i = tf.nn.bias_add(out_i, self.lora_bias[layer_idx+1][i])  # shape (batch_size, hidden_dim)
                 expert_outputs.append(out_i)
 
             if self.use_gate:
@@ -211,13 +207,10 @@ class MloraMoE(layers.Layer):
             except TypeError as e:  # TypeError: call() got an unexpected keyword argument 'training'
                 print("make sure the activation function use training flag properly", e)
                 x = self.activation_layers[layer_idx](x)
-
-
             # if self.dnn_dropout > 0:
             #     x = tf.keras.layers.Dropout(self.dnn_dropout)(x)
-
-
         return x
+
 
     ############################################################################
     # Below are the methods to freeze/unfreeze different parts of this layer.  #

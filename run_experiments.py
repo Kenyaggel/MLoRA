@@ -5,10 +5,10 @@ import csv
 import random
 import time
 from itertools import product
+from datetime import datetime
+from caffe2.perfkernels.hp_emblookup_codegen import suffix
 # from tensorflow import timestamp
-
 import run
-# 1) Import the main function from train.py
 from run_moe import main
 
 def run_experiments(datasets, models, param_changes=None, csv_filename="results.csv", temp_dir = "temp_configs"):
@@ -23,10 +23,6 @@ def run_experiments(datasets, models, param_changes=None, csv_filename="results.
     :param csv_filename: name of the CSV file to write results into
     :param temp_dir: directory to write temporary config files into
     """
-
-    # 2) Prepare a CSV writer
-    #    We'll build a header that includes dataset, model, plus any param keys,
-    #    plus the four metrics returned by main().
     # Create the folder if it does not exist.
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
@@ -43,14 +39,13 @@ def run_experiments(datasets, models, param_changes=None, csv_filename="results.
     header += [k.replace('.', '_') for k in param_keys]
     header += ["avg_loss", "avg_auc", "domain_loss", "domain_auc", "w_auc"]
 
-    # Open the CSV file in write mode (overwrite each time).
-    # If you want to append to an existing file, use "a" instead of "w".
+    # Open the CSV file in write mode
     with open(csv_filename, "w", newline="") as csv_file:
         writer = csv.writer(csv_file)
         # Write header row
         writer.writerow(header)
 
-        # 3) Outer loops over dataset and model
+        # Outer loops over dataset and model
         for dataset in datasets:
             for model_name in models:
                 # Build path to the base config
@@ -130,10 +125,12 @@ def run_experiments(datasets, models, param_changes=None, csv_filename="results.
 
 def create_experiment(datasets, models, param_changes):
     # include a timestamp for the CSV filename.
-    from datetime import datetime
+    suffix = datasets[0] if len(datasets) == 1 else "multi"
+    if param_changes.get("dataset.domain_split_path") is not None and len(param_changes["dataset.domain_split_path"]) == 1:
+        suffix += "_" + param_changes["dataset.domain_split_path"][0]
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return run_experiments(datasets, models, param_changes, csv_filename=f"result/results_{timestamp}.csv", temp_dir="config/temp_configs")
+    return run_experiments(datasets, models, param_changes, csv_filename=f"result/results_{suffix}_{timestamp}.csv", temp_dir="config/temp_configs")
 
 
 if __name__ == "__main__":
@@ -181,4 +178,13 @@ if __name__ == "__main__":
             "dataset.domain_split_path": ["split_by_theme_10"]
         }
         datasets = ["Taobao_10"]
+        create_experiment(datasets, mlora_models, param_changes)
+
+    if jobid == 5:
+        param_changes = {
+            "model.num_experts": [4, 6, 8],
+            "dataset.domain_split_path": ["split_by_gender"]
+        }
+        datasets = ["Movielens"]
+        models = ["autoint", "wdl", "deepfm", "nfm"]
         create_experiment(datasets, mlora_models, param_changes)
