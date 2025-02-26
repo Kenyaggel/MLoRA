@@ -1,4 +1,10 @@
-# MLoRA: Multi-Domain Low-Rank Adaptive Network for Click-Through Rate Prediction
+# MoE-MLoRA for Multi-Domain CTR Prediction: Efficient Adaptation with Expert Specialization
+
+
+## Our Team
+* Aviel Ben Siman Tov
+* Ken Yagel
+* Eyal German
 
 ## Requirements
 
@@ -17,15 +23,20 @@ Ubuntu 20.04
 
 ## Dataset Preprocess
 
-### Amazon dataset
+[//]: # (### Amazon dataset)
 
-Enter `dataset/Amazon`
+[//]: # ()
+[//]: # (Enter `dataset/Amazon`)
 
-* Download raw dataset at : [Amazon review data](https://nijianmo.github.io/amazon/index.html#complete-data)
-* unzip the dataset into `raw_data`
+[//]: # ()
+[//]: # (* Download raw dataset at : [Amazon review data]&#40;https://nijianmo.github.io/amazon/index.html#complete-data&#41;)
 
-* the split rule in `config_*.json`, such as `config_6.json`
-* run `split_py --config config_*.json`, it will automatically split the domains and create the dataset.
+[//]: # (* unzip the dataset into `raw_data`)
+
+[//]: # ()
+[//]: # (* the split rule in `config_*.json`, such as `config_6.json`)
+
+[//]: # (* run `split_py --config config_*.json`, it will automatically split the domains and create the dataset.)
 
 ### Taobao dataset
 
@@ -58,17 +69,7 @@ Enter `dataset/Movielens
 
 The model configuration files are located in the `config` folder, categorized into three datasets: Amazon, Taobao, and Movielens. Each base model is divided into the original model and the injected MLoRA versions. For example, `nfm.json` and `nfm_mlora.json`. `nfm.json` represents the original NFM model, while `nfm_mlora.json` signifies the NFM model with the help of MLoRA
 
-### Run baselines
-
-```
-python run.py config/Taobao_10/nfm.json
-python run.py config/Taobao_10/dcn.json
-python run.py config/Taobao_10/deepfm.json
-python run.py config/Taobao_10/wdl.json
-......
-```
-
-#### Run baselines with MLoRA
+### Run MLoRA baseline
 
 ```
 python run.py config/Taobao_10/nfm_mlora.json
@@ -78,16 +79,43 @@ python run.py config/Taobao_10/wdl_mlora.json
 ......
 ```
 
+### Run our MoE-MLoRA
+
+```
+python run_moe.py config/Taobao_10/nfm_mlora.json
+python run_moe.py config/Taobao_10/dcn_mlora.json
+python run_moe.py config/Taobao_10/deepfm_mlora.json
+python run_moe.py config/Taobao_10/wdl_mlora.json
+......
+```
+
+#### Running Experiments
+To run an experiment, use:
+```
+python run_experiments.py --jobid <job_id>
+```
+Job ID Mapping:
+* **Job ID 1-3**: Runs experiments on the **Movielens** dataset, varying the number of experts and domain splits (by gender, age, or occupation).
+* **Job ID 4**: Runs an experiment on the **Taobao_10** dataset with a theme-based domain split.
+* **Job ID 5**: Tests different expert configurations on **Movielens** (split by gender).
+
+
+To run all experiments using SLURM, submit a job array (1-5), and run:
+```
+python run_experiments.py
+```
+
 ### Config example
 
 ```json
 {
   "model": {
-    "name": "autoint_single",
+    "name": "autoint_mlora",
     "norm": "none",
     "dense": "dense",
     "lora_r": -1,
     "lora_reduce":16,
+    "num_experts": 2,
     "auxiliary_net": false,
     "user_dim": 128,
     "item_dim": 128,
@@ -151,6 +179,7 @@ python run.py config/Taobao_10/wdl_mlora.json
 
 ```
 "name": 'model_single' represents the original deep learning model, while 'model_lora' represents the deep learning model with MLoRA.
+"num_experts": The number of experts in the model. It must be at least equal to the number of domains in the dataset. A higher value allows multiple experts per domain.
 "lora_r": the rank of LoRA
 "lora_reduce": LoRA's temperature coefficient \alpha in our paper.
 "user_dim", "item_dim" and "domain_dim": The vector dimensions, the Taobao dataset provides user embeddings and item embeddings, both with a dimension of 128. The dimensions for the other two datasets can be modified as needed.
@@ -160,26 +189,12 @@ python run.py config/Taobao_10/wdl_mlora.json
 Training would stop when the model's performance failed to exceed the best performance achieved in previous training epochs for a consecutive number of times. More details in our paper.
 ```
 
-## Our Team
-**Zhiming Yang**: Graduate student at Northwestern Polytechnical University.
-
-**Haining Gao**: Senior Algorithm Engineer at Alibaba Group.
-
-**Dehong Gao**: Professor at Northwestern Polytechnical University. Please refer to his [personal homepage](https://scholar.google.com/citations?user=0uPb8MMAAAAJ&hl=zh-CN) for details.
-
-**Luwei Yang**: Algorithm Expert at Alibaba Group. Please refer to his [personal homepage](https://luweiyang.com/) for details.
-
-**Libin Yang**: Professor at Northwestern Polytechnical University.
-
-**Xiaoyan Cai**: Professor at Northwestern Polytechnical University.
-
-**Wei Ning**: Algorithm Expert at Alibaba Group.
-
-**Guannan Zhang**: Algorithm Expert at Alibaba Group.
 ## Acknowledgments
 
 Parts of this project utilize code from the following open-source projects:
 
-1. **DeepCTR**: [Repository URL](https://github.com/shenweichen/DeepCTR)
+1. **MLoRA**: [Repository URL](https://github.com/gaohaining/MLoRA)
+2. **DeepCTR**: [Repository URL](https://github.com/shenweichen/DeepCTR)
 2. **MAMDR**: [Repository URL](https://github.com/RManLuo/MAMDR)
+
    

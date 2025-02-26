@@ -9,10 +9,12 @@ from deepctr.layers.interaction import InnerProductLayer, OutterProductLayer
 from deepctr.layers.utils import concat_func, combined_dnn_input
 
 from model_zoo.DeepCTR.mlora import Mlora
+from model_zoo.lora_moe import MloraMoE
+
 
 def PNN(dnn_feature_columns, n_domain, lora_reduce, dnn_hidden_units=(256, 128, 64), l2_reg_embedding=0.00001, l2_reg_dnn=0,
         seed=1024, dnn_dropout=0, dnn_activation='relu', use_inner=True, use_outter=False, kernel_type='mat',
-        task='binary'):
+        task='binary', num_experts=4):
     """Instantiates the Product-based Neural Network architecture.
 
     :param dnn_feature_columns: An iterable containing all the features used by deep part of the model.
@@ -60,9 +62,13 @@ def PNN(dnn_feature_columns, n_domain, lora_reduce, dnn_hidden_units=(256, 128, 
         deep_input = linear_signal
 
     dnn_input = combined_dnn_input([deep_input], dense_value_list)
-    # dnn_out = DNN(dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, False, seed=seed)(dnn_input)
-    dnn_out = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, False, seed=seed,
+    # dnn_out = DNN(dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, False, seed=seed)
+    if num_experts <= 1:
+        dnn_out = Mlora(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, False, seed=seed,
                      lora_reduce=lora_reduce)([dnn_input, domain_input_layer])
+    else:
+        dnn_out = MloraMoE(n_domain, dnn_hidden_units, dnn_activation, l2_reg_dnn, dnn_dropout, False, seed=seed,
+                        lora_reduce=lora_reduce, num_experts=num_experts)([dnn_input, domain_input_layer])
 
     dnn_logit = tf.keras.layers.Dense(
         1, use_bias=False, kernel_initializer=tf.keras.initializers.glorot_normal(seed))(dnn_out)
