@@ -40,6 +40,7 @@ def run_experiments(datasets, models, param_changes=None, csv_filename="results.
     header += ["avg_loss", "avg_auc", "domain_loss", "domain_auc", "w_auc"]
 
     # Open the CSV file in write mode
+    print(f"Writing results to: {csv_filename}")
     with open(csv_filename, "w", newline="") as csv_file:
         writer = csv.writer(csv_file)
         # Write header row
@@ -186,5 +187,4 @@ if __name__ == "__main__":
             "dataset.domain_split_path": ["split_by_gender"]
         }
         datasets = ["Movielens"]
-        models = ["autoint", "wdl", "deepfm", "nfm"]
         create_experiment(datasets, mlora_models, param_changes)
