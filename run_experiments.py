@@ -8,7 +8,7 @@ import time
 from itertools import product
 from datetime import datetime
 import run
-from run_moe import main
+import run_moe
 
 def run_experiments(datasets, models, param_changes=None, csv_filename="results.csv", temp_dir = "temp_configs"):
     """
@@ -112,7 +112,7 @@ def run_experiments(datasets, models, param_changes=None, csv_filename="results.
                             print("Run MLoRA original")
                             avg_loss, avg_auc, domain_loss, domain_auc, w_auc = run.main(config)
                         else:
-                            avg_loss, avg_auc, domain_loss, domain_auc, w_auc = main(config)
+                            avg_loss, avg_auc, domain_loss, domain_auc, w_auc = run_moe.main(config)
 
                         # Write the run's results into the CSV.
                         row_data = [dataset, model_name, temp_config_path] + list(combo)
@@ -177,7 +177,6 @@ def main(jobid=None):
         }
         datasets = ["Taobao_10"]
         create_experiment(datasets, mlora_models, param_changes)
-
     if jobid == 5:
         param_changes = {
             "model.num_experts": [4, 6, 8],
@@ -185,6 +184,22 @@ def main(jobid=None):
         }
         datasets = ["Movielens"]
         create_experiment(datasets, mlora_models, param_changes)
+
+    if jobid == 6:
+        param_changes = {
+            "model.num_experts": [20],
+            "dataset.domain_split_path": ["split_by_theme_20"]
+        }
+        datasets = ["Taobao_10"]
+        create_experiment(datasets, mlora_models + models, param_changes)
+
+    if jobid == 7:
+        param_changes = {
+            "model.num_experts": [30],
+            "dataset.domain_split_path": ["split_by_theme_30"]
+        }
+        datasets = ["Taobao_10"]
+        create_experiment(datasets, mlora_models + models, param_changes)
 
 
 if __name__ == "__main__":
