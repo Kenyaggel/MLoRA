@@ -80,3 +80,6 @@ out/
 
 # Virtual environment
 venv/
+
+# dataset folder
+dataset/
